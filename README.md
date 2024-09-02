@@ -1,12 +1,34 @@
 # Bitcoin dev tooling
 
+## Setup
+
+`CMakeUserPresets.json` can be used without the `justfile`, but `justfile` depends on `CMakeUserPresets.json`.
+This is so that code is not duplicated between the two.
+
+To setup, symlink both files into your bitcoin core source directory:
+
+```bash
+# i.e. with bitcoin core at /home/user/bitcoin and this repo at
+# /home/user/bitcoin-dev-tools/dotfiles
+ln -s /home/user/bitcoin-dev-tools/dotfiles/CMakeUserPresets.json /home/user/bitcoin
+ln -s /home/user/bitcoin-dev-tools/dotfiles/justfile /home/user/bitcoin
+```
+
+From here it's generally easiest to use the `just` commands, as found below.
+
+CMake user presets can be used separately as follows:
+
+```bash
+cmake -B build --preset min
+```
+
 ## justfile
 
 [`just`](https://github.com/casey/just) is a command runner, like make.
 
 ### Setup
 
-Simply install `just`, and copy the `justfile` into your bitcoin core source directory.
+Simply install `just`, and copy or symlink the `justfile` into your bitcoin core source directory (as also described above).
 It can be named `justfile` or `.justfile` (to be "hidden") and can be added to .git/info/exclude so that git ignores it.
 
 Alternatively, you can clone this repo somewhere, and create a new `.justfile` in your bitcoin core source directory.

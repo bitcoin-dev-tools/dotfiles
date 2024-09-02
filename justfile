@@ -18,34 +18,20 @@ default:
 
 # Build default project
 [group('build')]
-build:
-    rm -Rf build
-    mkdir build
-    cmake -B build \
-        -DCMAKE_BUILD_TYPE=Debug
+build: clean
+    cmake -B build --preset min
     cmake --build build -j `nproc`
 
 # Build with all optional modules
 [group('build')]
-build-all:
-    rm -Rf build
-    mkdir build
-    cmake -B build \
-        -DCMAKE_BUILD_TYPE=Debug \
-        -DBUILD_BENCH=ON \
-        -DBUILD_FUZZ_BINARY=ON \
-        -DBUILD_GUI=ON \
-        -DBUILD_KERNEL_LIB=ON \
-        -DBUILD_UTIL_CHAINSTATE=ON \
-        -DWITH_MINIUPNPC:BOOL=ON \
-        -DWITH_USDT=ON \
-        -DWITH_ZMQ=ON
+build-all: clean
+    cmake -B build --preset all
     cmake --build build -j `nproc`
 
 # Re-build current config
 [group('build')]
 rebuild:
-    cmake --build build
+    cmake --build build -j `nproc`
 
 
 # Clean build dir
