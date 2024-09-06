@@ -1,48 +1,73 @@
 {
-  "version": 3,
-  "cmakeMinimumRequired": {"major": 3, "minor": 21, "patch": 0},
+  "version": 6,
+  "cmakeMinimumRequired": {"major": 3, "minor": 22, "patch": 0},
   "configurePresets": [
     {
-      "name": "min",
+      "name": "debug",
       "displayName": "Build minimal components with debug symbols",
+      "binaryDir": "${sourceDir}/build",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_BUILD_TYPE": "Debug"
       }
     },
     {
       "name": "legacy",
-      "displayName": "Legacy default build including fuzz bin, bench, chainstate & GUI with debug symbols",
+      "displayName": "Legacy (autotools) default build including fuzz bin, bench, chainstate & GUI with debug symbols",
+      "inherits": "debug",
       "cacheVariables": {
         "BUILD_BENCH": "ON",
         "BUILD_FUZZ_BINARY": "ON",
         "BUILD_GUI": "ON",
         "BUILD_UTIL_CHAINSTATE": "ON",
-        "WITH_SQLITE": "ON",
-        "CMAKE_BUILD_TYPE": "Debug"
+        "WITH_SQLITE": "ON"
       }
     },
     {
       "name": "all",
-      "displayName": "Build all optional modules",
+      "displayName": "Build all optional modules with debug symbols",
+      "inherits": ["debug", "legacy"],
       "cacheVariables": {
-        "BUILD_BENCH": "ON",
-        "BUILD_FUZZ_BINARY": "ON",
         "BUILD_GUI": "ON",
         "BUILD_KERNEL_LIB": "ON",
         "BUILD_UTIL_CHAINSTATE": "ON",
         "WITH_MINIUNPNC": "ON",
         "WITH_USDT": "ON",
-        "WITH_ZMQ": "ON",
-        "WITH_SQLITE": "ON",
-        "CMAKE_BUILD_TYPE": "Debug"
+        "WITH_ZMQ": "ON"
       }
-    },
+    }
+  ],
+  "buildPresets": [
     {
-      "name": "mold",
-      "displayName": "Use mold linker",
-      "cacheVariables": {
-        "CMAKE_CXX_FLAGS": "-fuse-ld=/home/linuxbrew/.linuxbrew/bin/mold"
-      }
+      "name": "default",
+      "configurePreset": "legacy",
+      "jobs": 16
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "default",
+      "configurePreset": "legacy",
+      "output": {"outputOnFailure": true},
+      "execution": {"noTestsAction": "error", "stopOnFailure": true}
+    }
+  ],
+  "workflowPresets": [
+    {
+      "name": "default",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "legacy"
+        },
+        {
+          "type": "build",
+          "name": "default"
+        },
+        {
+          "type": "test",
+          "name": "default"
+        }
+      ]
     }
   ]
 }
