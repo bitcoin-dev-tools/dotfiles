@@ -90,6 +90,11 @@ tidy-commit:
 tidy-diff:
     git diff | ( cd ./src/ && clang-tidy-diff-17.py -p2 -j {{ n }} )
 
+# Run a CI stage
+[group('ci')]
+ci FILE_ENV:
+    env -i HOME="$HOME" PATH="$PATH" USER="$USER" bash -c 'FILE_ENV="{{ FILE_ENV }}" ./ci/test_run_all.sh'
+
 # Run the linter
 [group('lint')]
 lint:

@@ -83,3 +83,9 @@ Typical usage for a user of this justfile might be:
     just prepare
     ```
 
+8. Run a CI stage locally:
+
+    ```bash
+    just ci ci/test/00_setup_env_native_tidy.sh
+    ```
+
