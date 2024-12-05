@@ -93,12 +93,7 @@ tidy-diff:
 # Run the linter
 [group('lint')]
 lint:
-    #!/usr/bin/env bash
-    # use subshell to load any python venv for flake8
-    cd test/lint/test_runner/
-    cargo fmt
-    cargo clippy
-    COMMIT_RANGE="$( git rev-list --max-count=1 --merges HEAD )..HEAD" cargo run
+    DOCKER_BUILDKIT=1 docker build -t bitcoin-linter --file "./ci/lint_imagefile" ./ && docker run --rm -v $(pwd):/bitcoin -it bitcoin-linter
 
 # Run all linters, clang-format and clang-tidy on top commit
 [group('lint')]
