@@ -1,70 +1,170 @@
+################################################################################
+# This justfile is designed to be placed one directory above the bitcoin core source tree
+# e.g.
+#
+# src/core/
+# ├── bitcoin
+# │   ├── build
+# │   ├── ci
+# │   ├── cmake
+# │   ├── CMakeLists.txt
+# │   ├── CMakePresets.json
+# │   ├── contrib
+# │   ├── CONTRIBUTING.md
+# │   ├── COPYING
+# │   ├── depends
+# │   ├── doc
+# │   ├── INSTALL.md
+# │   ├── libbitcoinkernel.pc.in
+# │   ├── README.md
+# │   ├── SECURITY.md
+# │   ├── share
+# │   ├── src
+# │   ├── test
+# │   └── vcpkg.json
+# └── justfile
+#
+# This helps to keep a clean source directory.
+#
+# If you prefer to use this file from within the bitcoin source directory
+# remove the below instruction:
+#
+# `set working-directory := "bitcoin"`
+#
+# See https://github.com/casey/just?tab=readme-ov-file#working-directory for
+# more information on `working-directory`.
+#
+################################################################################
+
 set dotenv-load := true
-set shell := ["bash", "-uc"]
+set quiet
+set shell := ["bash", "-euc"]
 set working-directory := "bitcoin"
 
 os := os()
-n := num_cpus()
+log-dir := "/tmp/bitcoin-core"
 
-alias rb := rebuild
-alias c := check
+build-log := log-dir + "/build.log"
+configure-log := log-dir + "/configure.log"
+configure-stdout-log := log-dir + "/configure-stdout.log"
+depends-log := log-dir + "/depends.log"
+depends-triplet := log-dir + "/triplet"
+functional-test-log := log-dir + "/functional-test.log"
+unit-test-log := log-dir + "/unit-test.log"
+
 alias b := build
 alias bd := build-dev
+alias c := clean
+alias conf := configure
+alias l := log
 alias p := prepare
-
-######################
-###### recipes #######
-######################
+alias rb := rebuild
+alias t := test
 
 [private]
 default:
     just --list
 
-# Build default project
+# Configure default project
 [group('build')]
-build *args: clean
-    cmake -B build {{ args }}
-    cmake --build build -j {{ n }}
+configure *args: setup-logs clean-logs
+    cmake -B build {{ args }} > {{configure-stdout-log}} 2> {{configure-log}}
 
-# Build with all optional modules
+# Make default project
 [group('build')]
-build-dev *args: clean
-    cmake -B build --preset dev-mode {{ args }}
-    cmake --build build -j {{ n }}
+make *args: && build-done
+    cmake --build build -j {{ num_cpus() }} > {{build-log}} 2>&1
+
+# Configure and make default project
+[group('build')]
+build *args: (configure args) && build-done
+    cmake --build build -j {{ num_cpus() }} > {{build-log}} 2>&1
+
+# Configure and make with all optional modules
+[group('build')]
+build-dev *args: (configure "--preset dev-mode" args) && build-done
+    cmake --build build -j {{ num_cpus() }} > {{build-log}} 2>&1
 
 # Re-build current config
 [group('build')]
-rebuild:
-    cmake --build build -j {{ n }}
+rebuild: && build-done
+    rm -f {{build-log}}
+    cmake --build build -j {{ num_cpus() }} > {{build-log}} 2>&1
 
-
-# Clean build dir
+# Build using depends
 [group('build')]
-clean:
+build-depends:
+    cd depends && gmake -j {{ num_cpus() }} 2>&1 | tee {{depends-log}}
+    grep -E '^to: .*/depends/[^/]+$' {{depends-log}} | awk '{print $2}' | sed 's|.*/depends/|depends/|' > {{depends-triplet}}
+    just build --toolchain `cat {{depends-triplet}}`/toolchain.cmake
+
+[private]
+build-done:
+    echo build complete
+
+# Show all cmake variables
+[group('build')]
+cmake-vars:
+    cmake -LAH build 2> {{configure-log}} | less
+
+# Setup logs directory
+[private]
+setup-logs:
+    mkdir -p {{log-dir}}
+
+# Clean old logs
+[private]
+clean-logs:
+    rm -f {{log-dir}}/*.log
+
+# View configuration logs
+[group('logs')]
+log-configure:
+    cat {{configure-log}} | less
+
+# View build log
+[group('logs')]
+log-build:
+    cat {{build-log}} | less
+
+# View configuration summary and build log
+[group('logs')]
+log:
+    cat {{depends-log}} {{configure-log}} {{build-log}} 2>/dev/null | less
+
+# View test logs
+[group('logs')]
+log-test:
+    cat  {{unit-test-log}} {{functional-test-log}} | less
+
+# View all logs
+[group('logs')]
+log-all:
+    cat {{depends-log}} {{configure-stdout-log}} {{configure-log}} {{build-log}} {{unit-test-log}} {{functional-test-log}} 2>/dev/null | less
+
+# Clean build dir and logs
+[group('build')]
+clean: && clean-logs
     rm -Rf build
 
 # Run unit tests
 [group('test')]
-test-unit:
-    ctest --test-dir build -j {{ n }}
-
-# Run all functional tests
-[group('test')]
-test-func:
-    build/test/functional/test_runner.py -j {{ n }}
-
-# Run all unit and functional tests
-[group('test')]
-test: test-unit test-func
-
-# Run a single functional test (filename.py)
-[group('test')]
-test-func1 test:
-    build/test/functional/test_runner.py {{ test }}
+testu:
+    ctest --test-dir build -j {{ num_cpus() }} 2>&1 | tee {{unit-test-log}}
 
 # Run a single unit test suite
 [group('test')]
-test-unit1 suite:
-    build/src/test/test_bitcoin --log_level=all --run_test={{ suite }}
+test-suite suite:
+    build/src/test/test_bitcoin --log_level=all --run_test={{suite}} 2>&1 | tee {{unit-test-log}}
+
+# Run functional test(s)
+[group('test')]
+testf *args:
+    build/test/functional/test_runner.py -j {{ num_cpus() }} {{args}} 2>&1 | tee {{functional-test-log}}
+
+# Run all unit and functional tests
+[group('test')]
+test: testu testf
 
 # Run clang-format-diff on top commit
 [no-exit-message]
@@ -82,39 +182,35 @@ format-diff:
 [no-exit-message]
 [private]
 tidy-commit:
-    git diff -U0 HEAD~1.. | ( cd ./src/ && clang-tidy-diff-17.py -p2 -j {{ n }} )
+    git diff -U0 HEAD~1.. | ( cd ./src/ && clang-tidy-diff-17.py -p2 -j {{ num_cpus() }} )
 
 # Run clang-tidy on the diff (must be configured with clang)
 [no-exit-message]
 [private]
 tidy-diff:
-    git diff | ( cd ./src/ && clang-tidy-diff-17.py -p2 -j {{ n }} )
+    git diff | ( cd ./src/ && clang-tidy-diff-17.py -p2 -j $(nproc) )
 
-# Run a CI stage
-[group('ci')]
-ci FILE_ENV:
-    env -i HOME="$HOME" PATH="$PATH" USER="$USER" bash -c 'FILE_ENV="{{ FILE_ENV }}" ./ci/test_run_all.sh'
-
-# Run the linter
+# Run the linters
 [group('lint')]
 lint:
     DOCKER_BUILDKIT=1 docker build -t bitcoin-linter --file "./ci/lint_imagefile" ./ && docker run --rm -v $(pwd):/bitcoin -it bitcoin-linter
 
 # Run all linters, clang-format and clang-tidy on top commit
 [group('lint')]
-lint-commit: lint
-    just format-commit
-    just tidy-commit
+lint-commit: lint && format-commit tidy-commit
 
 # Run all linters, clang-format and clang-tidy on diff
 [group('lint')]
-lint-diff: lint
-    just format-diff
-    just tidy-diff
+lint-diff: lint && format-diff tidy-diff
+
+# Run a CI stage locally
+[group('ci')]
+run-ci name:
+    env -i HOME="$HOME" PATH="$PATH" USER="$USER" bash -c 'FILE_ENV="./ci/test/00_setup_env_{{ name }}.sh" ./ci/test_run_all.sh'
 
 # Lint (top commit), build and test
 [group('pr tools')]
-check: lint-commit build test-func
+check: lint-commit build testf
 
 # Interactive rebase current branch from (git merge-base) (`just rebase -i` for interactive)
 [confirm("Warning, unsaved changes may be lost. Continue?")]
@@ -135,20 +231,18 @@ rebase-upstream *args:
 [no-exit-message]
 [private]
 rebase-lint:
-    git rebase -i `git merge-base HEAD upstream/master` \
-    --exec "just lint" \
+    git rebase -i `git merge-base HEAD upstream/master` --exec "just lint" \
 
 # Check each commit in the branch passes `just check`
 [confirm("Warning, unsaved changes may be lost. Continue?")]
 [no-exit-message]
 [group('pr tools')]
 prepare:
-    git rebase -i `git merge-base HEAD upstream/master` \
-    --exec "just check" \
+    git rebase -i `git merge-base HEAD upstream/master` --exec "just check" \
 
 # Git range-diff from <old-rev> to HEAD~ against master
 [no-exit-message]
-[group('tools')]
+[group('git')]
 range-diff old-rev:
     git range-diff master {{ old-rev }} HEAD~
 
@@ -161,7 +255,7 @@ profile pid:
 # Run benchmarks
 [group('perf')]
 bench:
-    src/bench/bench_bitcoin
+    build/src/bench/bench_bitcoin
 
 # Verify scripted diffs from master to HEAD~
 [group('tools')]
@@ -173,39 +267,55 @@ verify-scripted-diff:
 install-python-deps:
     awk '/^\$\{CI_RETRY_EXE\} pip3 install \\/,/^$/{if (!/^\$\{CI_RETRY_EXE\} pip3 install \\/ && !/^$/) print}' ci/lint/04_install.sh \
         | sed 's/\\$//g' \
-        | xargs pip3 install
-    pip3 install vulture # currently unversioned in our repo
-    pip3 install requests # only used in getcoins.py
-
-deps_command := if os == "linux" { "xdg-open https://github.com/bitcoin/bitcoin/blob/master/doc/build-unix.md" } else { if os == "macos" { "open https://github.com/bitcoin/bitcoin/blob/master/doc/build-osx.md" } else { if os == "windows" { "explorer https://github.com/bitcoin/bitcoin/blob/master/doc/build-windows.md" } else { if os == "freebsd" { "xdg-open https://github.com/bitcoin/bitcoin/blob/master/doc/build-freebsd.md" } else { "echo see https://github.com/bitcoin/bitcoin/tree/master/doc#building for build instructions" } } } }
+        | xargs uv pip install
+    uv pip install vulture # currently unversioned in our repo
+    uv pip install requests # only used in getcoins.py
 
 # Show project dependencies in browser
 [group('tools')]
+[linux]
 show-deps:
-    {{ deps_command }}
+    xdg-open https://github.com/bitcoin/bitcoin/blob/master/doc/build-unix.md
 
-# Build depends
-[group('build')]
-build-depends:
-    #!/usr/bin/env bash
+# Show project dependencies in browser
+[group('tools')]
+[macos]
+show-deps:
+    open https://github.com/bitcoin/bitcoin/blob/master/doc/build-osx.md
 
-    # Run make and capture its output while displaying it
-    cd depends && make -j {{ n }} 2>&1 | tee /tmp/make_output.txt
+# Show project dependencies in browser
+[group('tools')]
+[windows]
+show-deps:
+    explorer https://github.com/bitcoin/bitcoin/blob/master/doc/build-windows.md
 
-    # Extract the line that starts with 'to: ' and ends with your host triplet
-    build_path=$(grep -E '^to: .*/depends/[^/]+$' /tmp/make_output.txt | awk '{print $2}')
+# Show project dependencies in browser
+[group('tools')]
+[openbsd]
+show-deps:
+    xdg-open https://github.com/bitcoin/bitcoin/blob/master/doc/build-openbsd.md
 
-    # Check if build_path was found
-    if [ -z "$build_path" ]; then
-        echo "Error: Build may have completed successfully but host-triplet could not be automatically detected."
-        exit 1
-    fi
+# Attest to guix build outputs
+[group('guix')]
+guix-attest:
+    contrib/guix/guix-attest
 
-    # Extract the relative path starting from 'depends/'
-    HOST_TRIPLET_PATH="depends/${build_path##*/depends/}"
+# Perform a guix build with default options
+[group('guix')]
+guix-build:
+    contrib/guix/guix-build
 
-    echo
-    echo "To use depends, run cmake using the toolchain of the host triplet."
-    echo "This was auto-detected on this run as:"
-    echo
-    echo "cmake -B build --toolchain $HOST_TRIPLET_PATH/toolchain.cmake"
+# Clean intermediate guix build work directories
+[group('guix')]
+guix-clean:
+    contrib/guix/guix-clean
+
+# Codesign build outputs
+[group('guix')]
+guix-codesign:
+    contrib/guix/guix-codesign
+
+# Verify build output attestations
+[group('guix')]
+guix-verify:
+    contrib/guix/guix-verify
