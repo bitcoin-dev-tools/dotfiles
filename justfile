@@ -53,12 +53,12 @@ functional-test-log := log-dir + "/functional-test.log"
 unit-test-log := log-dir + "/unit-test.log"
 
 alias b := build
-alias bd := build-dev
+alias bd := build-depends
 alias c := clean
 alias conf := configure
 alias l := log
+alias m := make
 alias p := prepare
-alias rb := rebuild
 alias t := test
 
 [private]
@@ -67,36 +67,45 @@ default:
 
 # Configure default project
 [group('build')]
-configure *args: setup-logs clean-logs
+configure *args: setup-logs clean configure-started && configure-done
     cmake -B build {{ args }} > {{configure-stdout-log}} 2> {{configure-log}}
 
 # Make default project
 [group('build')]
-make *args: && build-done
+make *args: build-started && build-done
+    rm -f {{build-log}}
     cmake --build build -j {{ num_cpus() }} > {{build-log}} 2>&1
 
 # Configure and make default project
 [group('build')]
-build *args: (configure args) && build-done
+build *args: (configure args) build-started && build-done
     cmake --build build -j {{ num_cpus() }} > {{build-log}} 2>&1
 
 # Configure and make with all optional modules
 [group('build')]
-build-dev *args: (configure "--preset dev-mode" args) && build-done
-    cmake --build build -j {{ num_cpus() }} > {{build-log}} 2>&1
-
-# Re-build current config
-[group('build')]
-rebuild: && build-done
-    rm -f {{build-log}}
+build-dev *args: (configure "--preset dev-mode" args) build-started && build-done
     cmake --build build -j {{ num_cpus() }} > {{build-log}} 2>&1
 
 # Build using depends
 [group('build')]
 build-depends:
+    echo depends build running
     cd depends && gmake -j {{ num_cpus() }} 2>&1 | tee {{depends-log}}
     grep -E '^to: .*/depends/[^/]+$' {{depends-log}} | awk '{print $2}' | sed 's|.*/depends/|depends/|' > {{depends-triplet}}
+    echo depends build complete
     just build --toolchain `cat {{depends-triplet}}`/toolchain.cmake
+
+[private]
+configure-started:
+    echo configure running
+
+[private]
+configure-done:
+    echo configure complete
+
+[private]
+build-started:
+    echo build running
 
 [private]
 build-done:
@@ -114,7 +123,7 @@ setup-logs:
 
 # Clean old logs
 [private]
-clean-logs:
+log-clean:
     rm -f {{log-dir}}/*.log
 
 # View configuration logs
@@ -144,7 +153,7 @@ log-all:
 
 # Clean build dir and logs
 [group('build')]
-clean: && clean-logs
+clean: && log-clean
     rm -Rf build
 
 # Run unit tests
