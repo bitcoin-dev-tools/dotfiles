@@ -57,6 +57,7 @@ alias bd := build-depends
 alias c := clean
 alias conf := configure
 alias l := log
+alias la := log-all
 alias m := make
 alias p := prepare
 alias t := test
@@ -150,6 +151,11 @@ log-test:
 [group('logs')]
 log-all:
     cat {{depends-log}} {{configure-stdout-log}} {{configure-log}} {{build-log}} {{unit-test-log}} {{functional-test-log}} 2>/dev/null | less
+
+# Tail build logs
+[group('logs')]
+tail:
+    tail -F {{depends-log}} {{configure-stdout-log}} {{configure-log}} {{build-log}} {{unit-test-log}} {{functional-test-log}}
 
 # Clean build dir and logs
 [group('build')]
@@ -271,7 +277,7 @@ bench:
 verify-scripted-diff:
     test/lint/commit-script-check.sh origin/master..HEAD
 
-# Install python deps from ci/lint/install.sh
+# Install python deps from ci/lint/install.sh using uv
 [group('tools')]
 install-python-deps:
     awk '/^\$\{CI_RETRY_EXE\} pip3 install \\/,/^$/{if (!/^\$\{CI_RETRY_EXE\} pip3 install \\/ && !/^$/) print}' ci/lint/04_install.sh \
