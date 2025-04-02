@@ -39,6 +39,7 @@
 set dotenv-load := true
 set quiet
 set shell := ["bash", "-euc"]
+set unstable := true # Needed for `&&` in ramdisk-params
 set working-directory := "bitcoin"
 
 os := os()
@@ -51,6 +52,10 @@ depends-log := log-dir + "/depends.log"
 depends-triplet := log-dir + "/triplet"
 functional-test-log := log-dir + "/functional-test.log"
 unit-test-log := log-dir + "/unit-test.log"
+
+ramdisk-path := if os == "linux" { "/mnt/tmp" } else if os == "macos" { "/Volumes/ramdisk" } else { "" }
+ramdisk-size := "8"
+ramdisk-params := if ramdisk-path != "" && path_exists(ramdisk-path) { "--cachedir=" + ramdisk-path + "/cache --tmpdir=" + ramdisk-path } else { "" }
 
 alias b := build
 alias bd := build-depends
@@ -162,6 +167,25 @@ tail:
 clean: && log-clean
     rm -Rf build
 
+# Make a ramdisk at default path found in test/README.md (size in GB)
+[private]
+[linux]
+make-ramdisk size=ramdisk-size:
+    sudo mkdir -p {{ramdisk-path}}
+    sudo mount -t tmpfs -o size={{size}}g tmpfs {{ramdisk-path}}
+    sudo chown -R $USER:$(id -gn) {{ramdisk-path}}
+    sudo chmod 755 {{ramdisk-path}}
+    echo "Ramdisk mounted at {{ramdisk-path}} with size {{size}}GB"
+
+# Unmount and remove the ramdisk
+[private]
+[linux]
+unmount-ramdisk:
+    echo "unmounting ramdisk at {{ramdisk-path}}"
+    mountpoint -q {{ramdisk-path}}
+    test $? -eq 0 && sudo umount {{ramdisk-path}}
+    test $? -eq 0 && echo "Ramdisk unmounted from {{ramdisk-path}}" || echo "No ramdisk mounted at {{ramdisk-path}}"
+
 # Run unit tests
 [group('test')]
 testu:
@@ -175,7 +199,7 @@ test-suite suite:
 # Run functional test(s)
 [group('test')]
 testf *args:
-    build/test/functional/test_runner.py -j {{ num_cpus() }} {{args}} 2>&1 | tee {{functional-test-log}}
+    build/test/functional/test_runner.py -j {{ num_cpus() }} {{ramdisk-params}} {{args}} 2>&1 | tee {{functional-test-log}}
 
 # Run all unit and functional tests
 [group('test')]
