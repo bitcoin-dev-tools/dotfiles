@@ -43,15 +43,8 @@ set unstable := true # Needed for `&&` in ramdisk-params
 set working-directory := "bitcoin"
 
 os := os()
-log-dir := "/tmp/bitcoin-core"
 
-build-log := log-dir + "/build.log"
-configure-log := log-dir + "/configure.log"
-configure-stdout-log := log-dir + "/configure-stdout.log"
-depends-log := log-dir + "/depends.log"
-depends-triplet := log-dir + "/triplet"
-functional-test-log := log-dir + "/functional-test.log"
-unit-test-log := log-dir + "/unit-test.log"
+host-triplet := shell('./depends/config.guess')
 
 ramdisk-path := if os == "linux" { "/mnt/tmp" } else if os == "macos" { "/Volumes/ramdisk" } else { "" }
 ramdisk-size := "8"
@@ -61,8 +54,6 @@ alias b := build
 alias bd := build-depends
 alias c := clean
 alias conf := configure
-alias l := log
-alias la := log-all
 alias m := make
 alias p := prepare
 alias t := test
@@ -73,115 +64,69 @@ default:
 
 # Configure default project
 [group('build')]
-configure *args: setup-logs clean configure-started && configure-done
-    cmake -B build {{ args }} > {{configure-stdout-log}} 2> {{configure-log}}
+configure *args: clean
+    cmake -B build {{ args }}
 
 # Make default project
 [group('build')]
-make *args: build-started && build-done
-    rm -f {{build-log}}
-    cmake --build build -j {{ num_cpus() }} > {{build-log}} 2>&1
+make *args:
+    cmake --build build -j {{ num_cpus() }}
 
 # Configure and make default project
 [group('build')]
-build *args: (configure args) build-started && build-done
-    cmake --build build -j {{ num_cpus() }} > {{build-log}} 2>&1
+build *args: (configure args)
+    cmake --build build -j {{ num_cpus() }}
 
 # Configure and make with all optional modules
 [group('build')]
-build-dev *args: (configure "--preset dev-mode" args) build-started && build-done
-    cmake --build build -j {{ num_cpus() }} > {{build-log}} 2>&1
+build-dev *args: (configure "--preset dev-mode" args)
+    cmake --build build -j {{ num_cpus() }}
 
 # Build using depends
 [group('build')]
-build-depends:
+[no-quiet]
+build-depends triplet=host-triplet:
     echo depends build running
-    cd depends && gmake -j {{ num_cpus() }} 2>&1 | tee {{depends-log}}
-    grep -E '^to: .*/depends/[^/]+$' {{depends-log}} | awk '{print $2}' | sed 's|.*/depends/|depends/|' > {{depends-triplet}}
+    make -C depends -j {{ num_cpus() }}
     echo depends build complete
-    just build --toolchain `cat {{depends-triplet}}`/toolchain.cmake
+    just build --toolchain $(pwd)/depends/{{triplet}}/toolchain.cmake -DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=$(pwd)/depends/{{triplet}}/dependency_provider.cmake
 
 [private]
-configure-started:
-    echo configure running
-
-[private]
-configure-done:
-    echo configure complete
-
-[private]
-build-started:
-    echo build running
-
-[private]
-build-done:
-    echo build complete
+[group('build')]
+include-what-you-use: clean
+    # This is pretty broken still
+    CC="clang" CXX="clang++" cmake -B build -DCMAKE_CXX_INCLUDE_WHAT_YOU_USE=include-what-you-use -DCMAKE_GENERATOR="Unix Makefiles"
+    cmake --build build -j {{ num_cpus() }} 2> /tmp/iwyu.out
+    fix_includes.py -b --nosafe_headers --nocomments < /tmp/iwyu.out
 
 # Show all cmake variables
 [group('build')]
 cmake-vars:
-    cmake -LAH build 2> {{configure-log}} | less
-
-# Setup logs directory
-[private]
-setup-logs:
-    mkdir -p {{log-dir}}
-
-# Clean old logs
-[private]
-log-clean:
-    rm -f {{log-dir}}/*.log
-
-# View configuration logs
-[group('logs')]
-log-configure:
-    cat {{configure-log}} | less
-
-# View build log
-[group('logs')]
-log-build:
-    cat {{build-log}} | less
-
-# View configuration summary and build log
-[group('logs')]
-log:
-    cat {{depends-log}} {{configure-log}} {{build-log}} 2>/dev/null | less
-
-# View test logs
-[group('logs')]
-log-test:
-    cat  {{unit-test-log}} {{functional-test-log}} | less
-
-# View all logs
-[group('logs')]
-log-all:
-    cat {{depends-log}} {{configure-stdout-log}} {{configure-log}} {{build-log}} {{unit-test-log}} {{functional-test-log}} 2>/dev/null | less
-
-# Tail build logs
-[group('logs')]
-tail:
-    tail -F {{depends-log}} {{configure-stdout-log}} {{configure-log}} {{build-log}} {{unit-test-log}} {{functional-test-log}}
+    cmake -LAH build | less
 
 # Clean build dir and logs
 [group('build')]
-clean: && log-clean
+clean:
     rm -Rf build
 
 # Make a ramdisk at default path found in test/README.md (size in GB)
+[no-quiet]
 [private]
 [linux]
 make-ramdisk size=ramdisk-size:
-    sudo mkdir -p {{ramdisk-path}}
-    sudo mount -t tmpfs -o size={{size}}g tmpfs {{ramdisk-path}}
-    sudo chown -R $USER:$(id -gn) {{ramdisk-path}}
-    sudo chmod 755 {{ramdisk-path}}
-    echo "Ramdisk mounted at {{ramdisk-path}} with size {{size}}GB"
+    if ! mountpoint -q {{ramdisk-path}}; then \
+        echo "Making a ramdisk at {{ramdisk-path}} with size {{size}}GB (requires sudo)"; \
+        sudo mkdir -p {{ramdisk-path}}; \
+        sudo mount -t tmpfs -o size={{size}}g tmpfs {{ramdisk-path}}; \
+        sudo chown -R $USER:$(id -gn) {{ramdisk-path}}; \
+        sudo chmod 755 {{ramdisk-path}}; \
+        echo "Ramdisk mounted at {{ramdisk-path}} with size {{size}}GB"; \
+    fi
 
 # Unmount and remove the ramdisk
 [private]
 [linux]
 unmount-ramdisk:
-    echo "unmounting ramdisk at {{ramdisk-path}}"
     mountpoint -q {{ramdisk-path}}
     test $? -eq 0 && sudo umount {{ramdisk-path}}
     test $? -eq 0 && echo "Ramdisk unmounted from {{ramdisk-path}}" || echo "No ramdisk mounted at {{ramdisk-path}}"
@@ -189,21 +134,21 @@ unmount-ramdisk:
 # Run unit tests
 [group('test')]
 testu:
-    ctest --test-dir build -j {{ num_cpus() }} 2>&1 | tee {{unit-test-log}}
+    ctest --test-dir build -j {{ num_cpus() }}
 
 # Run a single unit test suite
 [group('test')]
 test-suite suite:
-    build/src/test/test_bitcoin --log_level=all --run_test={{suite}} 2>&1 | tee {{unit-test-log}}
+    build/src/test/test_bitcoin --log_level=all --run_test={{suite}}
 
 # Run functional test(s)
 [group('test')]
-testf *args:
-    build/test/functional/test_runner.py -j {{ num_cpus() }} {{ramdisk-params}} {{args}} 2>&1 | tee {{functional-test-log}}
+testf *args: make-ramdisk
+    build/test/functional/test_runner.py -j {{ num_cpus() }} {{ramdisk-params}} {{args}}
 
 # Run all unit and functional tests
 [group('test')]
-test: testu testf
+test: make-ramdisk testu testf
 
 # Run clang-format-diff on top commit
 [no-exit-message]
@@ -309,30 +254,6 @@ install-python-deps:
         | xargs uv pip install
     uv pip install vulture # currently unversioned in our repo
     uv pip install requests # only used in getcoins.py
-
-# Show project dependencies in browser
-[group('tools')]
-[linux]
-show-deps:
-    xdg-open https://github.com/bitcoin/bitcoin/blob/master/doc/build-unix.md
-
-# Show project dependencies in browser
-[group('tools')]
-[macos]
-show-deps:
-    open https://github.com/bitcoin/bitcoin/blob/master/doc/build-osx.md
-
-# Show project dependencies in browser
-[group('tools')]
-[windows]
-show-deps:
-    explorer https://github.com/bitcoin/bitcoin/blob/master/doc/build-windows.md
-
-# Show project dependencies in browser
-[group('tools')]
-[openbsd]
-show-deps:
-    xdg-open https://github.com/bitcoin/bitcoin/blob/master/doc/build-openbsd.md
 
 # Attest to guix build outputs
 [group('guix')]
