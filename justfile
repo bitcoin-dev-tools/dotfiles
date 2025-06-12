@@ -190,7 +190,7 @@ lint-diff: lint && format-diff tidy-diff
 # Run a CI stage locally
 [group('ci')]
 run-ci name:
-    env -i HOME="$HOME" PATH="$PATH" USER="$USER" bash -c 'FILE_ENV="./ci/test/00_setup_env_{{ name }}.sh" ./ci/test_run_all.sh'
+    env -i HOME="$HOME" PATH="$PATH" USER="$USER" DOCKER_HOST="$DOCKER_HOST" bash -c 'FILE_ENV="./ci/test/00_setup_env_{{ name }}.sh" ./ci/test_run_all.sh'
 
 # Lint (top commit), build and test
 [group('pr tools')]
