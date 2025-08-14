@@ -64,7 +64,7 @@ default:
 
 # Configure default project
 [group('build')]
-configure *args: clean
+configure *args:
     cmake -B build {{ args }}
 
 # Make default project
@@ -79,7 +79,7 @@ build *args: (configure args)
 
 # Configure and make with all optional modules
 [group('build')]
-build-dev *args: (configure "--preset dev-mode" args)
+build-dev *args: (configure "--preset dev-mode" "-DBUILD_GUI=NO" args)
     cmake --build build -j {{ num_cpus() }}
 
 # Build using depends
@@ -87,9 +87,9 @@ build-dev *args: (configure "--preset dev-mode" args)
 [no-quiet]
 build-depends triplet=host-triplet:
     echo depends build running
-    make -C depends -j {{ num_cpus() }}
+    make -C depends -j{{ num_cpus() }} CC="clang" CXX="clang++"
     echo depends build complete
-    just build --toolchain $(pwd)/depends/{{triplet}}/toolchain.cmake -DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=$(pwd)/depends/{{triplet}}/dependency_provider.cmake
+    just build --toolchain $(pwd)/depends/{{triplet}}/toolchain.cmake
 
 [private]
 [group('build')]
@@ -107,6 +107,7 @@ cmake-vars:
 # Clean build dir and logs
 [group('build')]
 clean:
+    make -C depends clean
     rm -Rf build
 
 # Make a ramdisk at default path found in test/README.md (size in GB)
@@ -133,8 +134,8 @@ unmount-ramdisk:
 
 # Run unit tests
 [group('test')]
-testu:
-    ctest --test-dir build -j {{ num_cpus() }}
+testu *args:
+    ctest --test-dir build -j {{ num_cpus() }} {{args}}
 
 # Run a single unit test suite
 [group('test')]
@@ -177,7 +178,7 @@ tidy-diff:
 # Run the linters
 [group('lint')]
 lint:
-    DOCKER_BUILDKIT=1 docker build -t bitcoin-linter --file "./ci/lint_imagefile" ./ && docker run --rm -v $(pwd):/bitcoin -it bitcoin-linter
+    docker buildx build -t bitcoin-linter --file "./ci/lint_imagefile" ./ && docker run --rm -v $(pwd):/bitcoin -it bitcoin-linter
 
 # Run all linters, clang-format and clang-tidy on top commit
 [group('lint')]
@@ -189,8 +190,8 @@ lint-diff: lint && format-diff tidy-diff
 
 # Run a CI stage locally
 [group('ci')]
-run-ci name:
-    env -i HOME="$HOME" PATH="$PATH" USER="$USER" DOCKER_HOST="$DOCKER_HOST" bash -c 'FILE_ENV="./ci/test/00_setup_env_{{ name }}.sh" ./ci/test_run_all.sh'
+run-ci file-env:
+    env -i HOME="$HOME" PATH="$PATH" USER="$USER" BASE_CACHE="$BASE_CACHE" SOURCES_PATH="$SOURCES_PATH" SDK_PATH="$SDK_PATH" MAKEJOBS="-j$(nproc)" bash -c 'FILE_ENV="{{ file-env }}" ./ci/test_run_all.sh'
 
 # Lint (top commit), build and test
 [group('pr tools')]
