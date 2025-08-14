@@ -264,6 +264,7 @@ guix-attest:
 # Perform a guix build with default options
 [group('guix')]
 guix-build:
+    set -x SOURCE_DATE_EPOCH
     contrib/guix/guix-build
 
 # Clean intermediate guix build work directories
@@ -274,6 +275,7 @@ guix-clean:
 # Codesign build outputs
 [group('guix')]
 guix-codesign:
+    set -x SOURCE_DATE_EPOCH
     contrib/guix/guix-codesign
 
 # Verify build output attestations
