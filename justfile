@@ -214,7 +214,7 @@ tidy-diff:
 [group('lint')]
 [no-cd]
 lint:
-    docker buildx build -t bitcoin-linter --file "./ci/lint_imagefile" ./ && docker run --rm -v $(pwd):/bitcoin -it bitcoin-linter
+    docker buildx build -t bitcoin-linter "$DOCKER_BUILD_CACHE_ARG" --file "./ci/lint_imagefile" ./ && docker run --rm -v $(pwd):/bitcoin -it bitcoin-linter
 
 # Run all linters, clang-format and clang-tidy on top commit
 [group('lint')]
@@ -230,7 +230,7 @@ lint-diff: lint && format-diff tidy-diff
 [group('ci')]
 [no-cd]
 run-ci file-env:
-    env -i HOME="$HOME" PATH="$PATH" USER="$USER" BASE_CACHE="$BASE_CACHE" SOURCES_PATH="$SOURCES_PATH" SDK_PATH="$SDK_PATH" MAKEJOBS="-j$(nproc)" bash -c 'FILE_ENV="{{ file-env }}" ./ci/test_run_all.sh'
+    env -i HOME="$HOME" PATH="$PATH" USER="$USER" BASE_CACHE="$BASE_CACHE" SOURCES_PATH="$SOURCES_PATH" SDK_PATH="$SDK_PATH" MAKEJOBS="-j$(nproc)" DOCKER_BUILD_CACHE_ARG="$DOCKER_BUILD_CACHE_ARG" bash -c 'FILE_ENV="{{ file-env }}" ./ci/test_run_all.sh'
 
 # Lint (top commit), build and test
 [group('pr tools')]
