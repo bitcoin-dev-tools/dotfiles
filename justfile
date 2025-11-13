@@ -91,13 +91,36 @@ build-depends triplet=host-triplet:
     echo depends build complete
     just build --toolchain $(pwd)/depends/{{triplet}}/toolchain.cmake
 
-[private]
+# Run include-what-you-use analysis on changed files only
 [group('build')]
-include-what-you-use: clean
-    # This is pretty broken still
-    CC="clang" CXX="clang++" cmake -B build -DCMAKE_CXX_INCLUDE_WHAT_YOU_USE=include-what-you-use -DCMAKE_GENERATOR="Unix Makefiles"
-    cmake --build build -j {{ num_cpus() }} 2> /tmp/iwyu.out
-    fix_includes.py -b --nosafe_headers --nocomments < /tmp/iwyu.out
+[no-cd]
+include-what-you-use-diff builddir="build":
+    #!/usr/bin/env bash
+    changed_files=$(git diff --name-only $(git merge-base HEAD upstream/master) -- '*.cpp' '*.h' | grep '^src/' || true)
+    if [ -n "$changed_files" ]; then
+        echo "Running IWYU on changed files:"
+        echo "$changed_files"
+        echo "$changed_files" | xargs -I {} iwyu_tool.py \
+            -p {{ builddir }} {} \
+            -- -Xiwyu --cxx17ns -Xiwyu --mapping_file="$(pwd)/contrib/devtools/iwyu/bitcoin.core.imp" \
+            -Xiwyu --max_line_length=160 \
+            2>&1 | tee /tmp/iwyu.out
+        fix_includes.py --nosafe_headers < /tmp/iwyu.out
+        echo "IWYU fixes applied to changed files"
+    else
+        echo "No C++ files changed vs upstream/master"
+    fi
+
+# Run include-what-you-use on all files
+[group('build')]
+[no-cd]
+include-what-you-use builddir="build":
+    iwyu_tool.py \
+        -p {{ builddir }} -j {{ num_cpus() }} \
+        -- -Xiwyu --cxx17ns -Xiwyu --mapping_file="$(pwd)/contrib/devtools/iwyu/bitcoin.core.imp" \
+        -Xiwyu --max_line_length=160 \
+        2>&1 | tee /tmp/iwyu.out
+    fix_includes.py --nosafe_headers < /tmp/iwyu.out
 
 # Show all cmake variables
 [group('build')]
