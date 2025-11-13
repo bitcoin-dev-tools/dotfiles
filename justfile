@@ -43,7 +43,8 @@ set unstable := true # Needed for `&&` in ramdisk-params
 
 os := os()
 
-host-triplet := shell('./depends/config.guess')
+# host-triplet := shell('./depends/config.guess')
+host-triplet := "x86_64-pc-linux-gnu"
 
 ramdisk-path := if os == "linux" { "/mnt/tmp" } else if os == "macos" { "/Volumes/ramdisk" } else { "" }
 ramdisk-size := "8"
@@ -88,11 +89,9 @@ build-dev *args: (configure "--preset dev-mode" "-DBUILD_GUI=NO" args)
 # Build using depends
 [group('build')]
 [no-quiet]
-build-depends triplet=host-triplet:
-    echo depends build running
-    make -C depends -j{{ num_cpus() }} CC="clang" CXX="clang++"
-    echo depends build complete
-    just build --toolchain $(pwd)/depends/{{triplet}}/toolchain.cmake
+[no-cd]
+build-depends triplet=host-triplet *args:
+    nix develop ~/src/bitcoin-dev-tools/bix#depends --command bash -c "make -C depends -j{{ num_cpus() }} build_CC=\"$CC\" build_CXX=\"$CXX\" {{ args }} && just build --toolchain $(pwd)/depends/{{triplet}}/toolchain.cmake"
 
 # Run include-what-you-use analysis on changed files only
 [group('build')]
