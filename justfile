@@ -178,6 +178,16 @@ test-suite suite:
 testf *args: make-ramdisk
     build/test/functional/test_runner.py -j {{ num_cpus() }} {{ramdisk-params}} {{args}}
 
+# Run functional tests with tracing enabled (requires sudo)
+[group('test')]
+[no-cd]
+testf-trace *args: make-ramdisk
+    #!/usr/bin/env bash
+    set -eu
+    trap 'sudo sysctl -q kernel.perf_event_paranoid=2' EXIT
+    sudo sysctl -q kernel.perf_event_paranoid=-1
+    build/test/functional/test_runner.py -j {{ num_cpus() }} {{ramdisk-params}} {{args}}
+
 # Run all unit and functional tests
 [group('test')]
 [no-cd]
