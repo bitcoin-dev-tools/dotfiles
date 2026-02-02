@@ -225,7 +225,7 @@ tidy-diff:
 [group('lint')]
 [no-cd]
 lint:
-    docker buildx build -t bitcoin-linter "$DOCKER_BUILD_CACHE_ARG" --file "./ci/lint_imagefile" ./ && docker run --rm -v $(pwd):/bitcoin -it bitcoin-linter
+    ./ci/lint.py
 
 # Run all linters, clang-format and clang-tidy on top commit
 [group('lint')]
