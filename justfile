@@ -201,14 +201,14 @@ format-diff:
 [private]
 [no-cd]
 tidy-commit:
-    git diff -U0 HEAD~1.. | ( cd ./src/ && clang-tidy-diff-17.py -p2 -j {{ num_cpus() }} )
+    git diff -U0 HEAD~1.. | clang-tidy-diff -p1 -path build -j {{ num_cpus() }}
 
 # Run clang-tidy on the diff (must be configured with clang)
 [no-exit-message]
 [private]
 [no-cd]
 tidy-diff:
-    git diff | ( cd ./src/ && clang-tidy-diff-17.py -p2 -j $(nproc) )
+    git diff -U0 | clang-tidy-diff -p1 -path build -j {{ num_cpus() }}
 
 # Run the linters
 [group('lint')]
