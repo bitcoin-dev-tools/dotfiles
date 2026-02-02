@@ -360,3 +360,12 @@ guix-codesign:
 [no-cd]
 guix-verify:
     contrib/guix/guix-verify
+
+# Fetch SDK version from bitcoincore.org, use version string "Xcode-26.1.1-17B100"
+[group('guix')]
+fetch-sdk version:
+    #!/usr/bin/env bash
+    export SDK_PATH="/home/will/.local/state/guix-builds/macos-sdks"
+    cd "$SDK_PATH"
+    curl https://bitcoincore.org/depends-sources/sdks/{{version}}-extracted-SDK-with-libcxx-headers.tar -o {{version}}-extracted-SDK-with-libcxx-headers.tar
+    tar xf {{version}}-extracted-SDK-with-libcxx-headers.tar
