@@ -242,7 +242,16 @@ lint-diff: lint && format-diff tidy-diff
 [group('ci')]
 [no-cd]
 run-ci file-env:
-    env -i HOME="$HOME" PATH="$PATH" USER="$USER" BASE_CACHE="$BASE_CACHE" SOURCES_PATH="$SOURCES_PATH" SDK_PATH="$SDK_PATH" MAKEJOBS="-j$(nproc)" DOCKER_BUILD_CACHE_ARG="$DOCKER_BUILD_CACHE_ARG" bash -c 'FILE_ENV="{{ file-env }}" ./ci/test_run_all.sh'
+    env -i HOME="$HOME" \
+        PATH="$PATH" \
+        USER="$USER" \
+        BASE_CACHE="$BASE_CACHE" \
+        SOURCES_PATH="$SOURCES_PATH" \
+        DIR_QA_ASSETS="$DIR_QA_ASSETS" \
+        SDK_PATH="$SDK_PATH" \
+        MAKEJOBS="-j$(nproc)" \
+        DOCKER_BUILD_CACHE_ARG="$DOCKER_BUILD_CACHE_ARG" \
+        bash -c 'FILE_ENV="{{ file-env }}" ./ci/test_run_all.sh'
 
 # Lint (top commit), build and test
 [group('pr tools')]
