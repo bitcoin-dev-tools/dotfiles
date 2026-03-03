@@ -91,7 +91,7 @@ build-dev *args: (configure "--preset dev-mode" "-DBUILD_GUI=NO" args)
 [no-quiet]
 [no-cd]
 build-depends triplet=host-triplet *args:
-    nix develop ~/src/bitcoin-dev-tools/bix#depends --command bash -c "make -C depends -j{{ num_cpus() }} build_CC=\"$CC\" build_CXX=\"$CXX\" {{ args }} && just build --toolchain $(pwd)/depends/{{triplet}}/toolchain.cmake"
+    nix develop ~/src/bitcoin-dev-tools/bix#depends --command bash -c "make -C depends -j{{ num_cpus() }} download build_CC=\"$CC\" build_CXX=\"$CXX\" {{ args }} && just build --toolchain $(pwd)/depends/{{triplet}}/toolchain.cmake"
 
 # Run include-what-you-use analysis on changed files only
 [group('build')]
