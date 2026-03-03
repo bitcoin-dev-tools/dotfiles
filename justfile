@@ -256,7 +256,7 @@ run-ci file-env:
 # Lint (top commit), build and test
 [group('pr tools')]
 [no-cd]
-check: lint-commit build testf
+check: lint-commit build test test
 
 # Interactive rebase current branch from (git merge-base) (`just rebase -i` for interactive)
 [confirm("Warning, unsaved changes may be lost. Continue?")]
