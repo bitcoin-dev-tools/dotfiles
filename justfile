@@ -295,7 +295,7 @@ prepare:
 [group('git')]
 [no-cd]
 range-diff old-rev:
-    git range-diff master {{ old-rev }} HEAD~
+    git range-diff --creation-factor=95 master {{ old-rev }} HEAD~
 
 # Profile a running bitcoind for 60 seconds (e.g. just profile `pgrep bitcoind`). Outputs perf.data
 [no-exit-message]
