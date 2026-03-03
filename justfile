@@ -137,6 +137,7 @@ clean:
     make -C depends clean
     rm -Rf build
     rm -Rf /tmp/bitcoin_func_test_*
+    mkdir -p $BASE_CACHE
 
 # Make a ramdisk at default path found in test/README.md (size in GB)
 [no-quiet]
